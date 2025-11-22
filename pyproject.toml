@@ -1,0 +1,16 @@
+[project]
+name = "slug-sweep-deduper"
+version = "0.1.0"
+description = "Windows CLI utility for safely removing redundant duplicate files from UCSC PPDO construction records archives"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "click>=8.1.0",
+    "httpx>=0.27.0",
+    "psycopg[binary]>=3.2.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+slug-sweep-deduper = "cli:main"

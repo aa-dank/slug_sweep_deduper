@@ -1,0 +1,13 @@
+# development directory
+development/
+
+# venv
+venv/
+env/
+*.venv
+
+#vscode stuff
+.vscode/
+
+#dotenv file
+.env
