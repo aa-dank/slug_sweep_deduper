@@ -1,6 +1,10 @@
 import os
 import re
+import shutil
+import tempfile
+import subprocess
 from pathlib import Path, PurePosixPath
+from typing import Optional
 
 
 def build_file_path(base_mount: str,
@@ -14,7 +18,7 @@ def build_file_path(base_mount: str,
     ----------
     base_mount : str
         The local mount of the records share, e.g.
-        r"N:\PPDO\Records"  (Windows)  or  "/mnt/records" (Linux).
+        r"N:\\PPDO\\Records"  (Windows)  or  "/mnt/records" (Linux).
     server_dir : str
         The value from file_locations.file_server_directories
         (always stored with forward-slashes).
@@ -121,9 +125,9 @@ def extract_server_dirs(full_path: str | Path, base_mount: str | Path) -> str:
     Parameters
     ----------
     full_path   Absolute path on the client machine
-                e.g. r"N:\\PPDO\\Records\\49xx   Long Marine Lab\\4932\\..."
+                e.g. r"N:\\\\PPDO\\\\Records\\\\49xx   Long Marine Lab\\\\4932\\\\..."
     base_mount  The local mount-point for the records share
-                e.g. r"N:\\PPDO\\Records"   or   "/mnt/records"
+                e.g. r"N:\\\\PPDO\\\\Records"   or   "/mnt/records"
 
     Returns
     -------
@@ -142,3 +146,95 @@ def extract_server_dirs(full_path: str | Path, base_mount: str | Path) -> str:
 
     # 2) Convert to POSIX form (forces forward slashes)
     return str(PurePosixPath(rel_parts))
+
+
+def normalize_path_for_query(user_path: str | Path, mount: str | Path) -> str:
+    """Convert a Windows user path to the Postgres query format.
+    
+    Parameters
+    ----------
+    user_path : str | Path
+        The full Windows path entered by the user
+        e.g. r"N:\\PPDO\\Records\\42xx   Student Housing West\\4203\\4203\\F - Bid Documents"
+    mount : str | Path
+        The file server mount point
+        e.g. r"N:\\PPDO\\Records"
+    
+    Returns
+    -------
+    str
+        The relative path with forward slashes suitable for Postgres queries
+        e.g. "42xx   Student Housing West/4203/4203/F - Bid Documents"
+    """
+    return extract_server_dirs(user_path, mount)
+
+
+def format_file_size(size_bytes: int) -> str:
+    """Format file size in human-readable format.
+    
+    Parameters
+    ----------
+    size_bytes : int
+        File size in bytes
+    
+    Returns
+    -------
+    str
+        Formatted size string (e.g., "1.5 MB", "823 KB")
+    """
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.0f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+class TempFileManager:
+    """Manages temporary file copies for the 'open' command."""
+    
+    def __init__(self):
+        self.temp_dir: Optional[Path] = None
+    
+    def get_temp_dir(self) -> Path:
+        """Get or create the temporary directory."""
+        if self.temp_dir is None:
+            self.temp_dir = Path(tempfile.gettempdir()) / "slug_sweep_deduper_open"
+            self.temp_dir.mkdir(parents=True, exist_ok=True)
+        return self.temp_dir
+    
+    def copy_and_open(self, source_path: Path) -> bool:
+        """Copy a file to temp directory and open it with the default application.
+        
+        Parameters
+        ----------
+        source_path : Path
+            Path to the source file
+        
+        Returns
+        -------
+        bool
+            True if successful, False otherwise
+        """
+        try:
+            temp_dir = self.get_temp_dir()
+            dest_path = temp_dir / source_path.name
+            
+            # Copy file to temp directory
+            shutil.copy2(source_path, dest_path)
+            
+            # Open with default application (Windows)
+            subprocess.Popen(['cmd', '/c', 'start', '', str(dest_path)], shell=False)
+            
+            return True
+        except Exception as e:
+            print(f"Error opening file: {e}")
+            return False
+    
+    def cleanup(self):
+        """Remove the temporary directory and all its contents."""
+        if self.temp_dir and self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+            self.temp_dir = None

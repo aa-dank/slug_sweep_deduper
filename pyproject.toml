@@ -13,4 +13,11 @@ dependencies = [
 ]
 
 [project.scripts]
-slug-sweep-deduper = "cli:main"
+slug-sweep-deduper = "slug_sweep_deduper.cli:main"
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
