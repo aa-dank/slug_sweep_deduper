@@ -16,3 +16,8 @@ env/
 #pycache
 __pycache__/
 *.pyc
+
+# Database files
+*.sqlite
+*.db
+*.sqlite3

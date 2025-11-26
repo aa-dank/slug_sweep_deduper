@@ -234,8 +234,7 @@ class ArchivesAppDB:
         filename, size, loc_count
         """
         with self.conn.cursor() as cur:
-            cur.execute(
-                """
+            dupes_query= """
                 WITH locs AS (
                     SELECT
                         fl.file_id AS archives_app_file_id,
@@ -245,14 +244,13 @@ class ArchivesAppDB:
                         COUNT(*) OVER (PARTITION BY fl.file_id) AS loc_count
                     FROM file_locations fl
                     JOIN files f ON f.id = fl.file_id
-                    WHERE fl.file_server_directories = %(target_location)s
+                    WHERE fl.file_server_directories LIKE %(target_location)s || '%%'
                 )
                 SELECT *
                 FROM locs
                 WHERE loc_count > 1
-                """,
-                {"target_location": target_location}
-            )
+                """
+            cur.execute(dupes_query, {"target_location": target_location})
             
             columns = [desc[0] for desc in cur.description]
             results = []
