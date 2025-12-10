@@ -130,6 +130,8 @@ def parse_user_command(command: str) -> tuple[str, List[int]]:
         return ('skip', [])
     elif command == 'q':
         return ('quit', [])
+    elif command == 'o':
+        return ('open', [])
     elif command.startswith('o '):
         try:
             num = int(command.split()[1])
@@ -245,7 +247,8 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                 console.print("\n[yellow]Commands:[/yellow]")
                 console.print("  [cyan]<numbers>[/cyan] - Delete specific instances (e.g., '1 3')")
                 console.print("  [cyan]c[/cyan] - Keep all copies (mark processed)")
-                console.print("  [cyan]o <#>[/cyan] - Open file for inspection")
+                console.print("  [cyan]o[/cyan] - Open first accessible copy for inspection")
+                console.print("  [cyan]o <#>[/cyan] - Open a specific file by number")
                 console.print("  [cyan]s[/cyan] - Skip this file")
                 console.print("  [cyan]q[/cyan] - Quit and sync database")
                 
@@ -277,8 +280,12 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                     break
                 
                 elif cmd_type == 'open':
-                    num = numbers[0]
-                    if 1 <= num <= len(all_locations):
+                    if numbers:
+                        num = numbers[0]
+                        if not (1 <= num <= len(all_locations)):
+                            console.print("[red]Invalid file number.[/red]")
+                            continue
+
                         loc = all_locations[num - 1]
                         file_path = build_file_path(
                             file_server_mount,
@@ -290,8 +297,22 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                             console.print("[green]File opened successfully.[/green]")
                         else:
                             console.print("[red]Failed to open file.[/red]")
-                    else:
-                        console.print("[red]Invalid file number.[/red]")
+                        continue
+
+                    console.print("[cyan]Attempting to open the first accessible copy...[/cyan]")
+                    opened = False
+                    for loc in all_locations:
+                        file_path = build_file_path(
+                            file_server_mount,
+                            loc['file_server_directories'],
+                            loc['filename']
+                        )
+                        if temp_manager.copy_and_open(file_path):
+                            console.print(f"[green]Opened: {file_path}[/green]")
+                            opened = True
+                            break
+                    if not opened:
+                        console.print("[red]Unable to open any copies of this file.[/red]")
                     continue
                 
                 elif cmd_type == 'delete':
