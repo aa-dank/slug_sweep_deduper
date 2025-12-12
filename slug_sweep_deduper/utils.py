@@ -192,6 +192,32 @@ def format_file_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
+def open_directory(path: Path) -> bool:
+    """Open a directory in the default file explorer.
+    
+    Parameters
+    ----------
+    path : Path
+        Path to the directory
+    
+    Returns
+    -------
+    bool
+        True if successful, False otherwise
+    """
+    try:
+        if not path.exists() or not path.is_dir():
+            print(f"Directory not found: {path}")
+            return False
+            
+        # Open with default application (Windows)
+        subprocess.Popen(['explorer', str(path)])
+        return True
+    except Exception as e:
+        print(f"Error opening directory: {e}")
+        return False
+
+
 class TempFileManager:
     """Manages temporary file copies for the 'open' command."""
     

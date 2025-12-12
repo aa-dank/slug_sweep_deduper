@@ -16,7 +16,8 @@ from slug_sweep_deduper.utils import (
     normalize_path_for_query,
     build_file_path,
     format_file_size,
-    TempFileManager
+    TempFileManager,
+    open_directory
 )
 from slug_sweep_deduper.filters import ACTIVE_FILTERS
 
@@ -117,7 +118,7 @@ def parse_user_command(command: str) -> tuple[str, List[int]]:
     -------
     tuple
         (command_type, list_of_numbers)
-        command_type can be: 'delete', 'keep', 'open', 'skip', 'quit'
+        command_type can be: 'delete', 'keep', 'open', 'directory', 'skip', 'quit'
     """
     command = command.strip().lower()
     
@@ -132,10 +133,10 @@ def parse_user_command(command: str) -> tuple[str, List[int]]:
         return ('quit', [])
     elif command == 'o':
         return ('open', [])
-    elif command.startswith('o '):
+    elif command.startswith('d '):
         try:
             num = int(command.split()[1])
-            return ('open', [num])
+            return ('directory', [num])
         except (IndexError, ValueError):
             return ('invalid', [])
     else:
@@ -248,7 +249,7 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                 console.print("  [cyan]<numbers>[/cyan] - Delete specific instances (e.g., '1 3')")
                 console.print("  [cyan]c[/cyan] - Keep all copies (mark processed)")
                 console.print("  [cyan]o[/cyan] - Open first accessible copy for inspection")
-                console.print("  [cyan]o <#>[/cyan] - Open a specific file by number")
+                console.print("  [cyan]d <#>[/cyan] - Open containing directory of a specific file")
                 console.print("  [cyan]s[/cyan] - Skip this file")
                 console.print("  [cyan]q[/cyan] - Quit and sync database")
                 
@@ -279,7 +280,7 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                     console.print("[green]Marked as processed (all copies kept).[/green]")
                     break
                 
-                elif cmd_type == 'open':
+                elif cmd_type == 'directory':
                     if numbers:
                         num = numbers[0]
                         if not (1 <= num <= len(all_locations)):
@@ -287,18 +288,19 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                             continue
 
                         loc = all_locations[num - 1]
-                        file_path = build_file_path(
+                        # Build path to the directory, not the file
+                        dir_path = build_file_path(
                             file_server_mount,
-                            loc['file_server_directories'],
-                            loc['filename']
+                            loc['file_server_directories']
                         )
-                        console.print(f"[cyan]Opening file: {file_path}[/cyan]")
-                        if temp_manager.copy_and_open(file_path):
-                            console.print("[green]File opened successfully.[/green]")
+                        console.print(f"[cyan]Opening directory: {dir_path}[/cyan]")
+                        if open_directory(dir_path):
+                            console.print("[green]Directory opened successfully.[/green]")
                         else:
-                            console.print("[red]Failed to open file.[/red]")
-                        continue
+                            console.print("[red]Failed to open directory.[/red]")
+                    continue
 
+                elif cmd_type == 'open':
                     console.print("[cyan]Attempting to open the first accessible copy...[/cyan]")
                     opened = False
                     for loc in all_locations:
