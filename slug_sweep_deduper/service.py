@@ -151,6 +151,24 @@ class SweepDB:
         )
         return cursor.fetchone() is not None
 
+    def is_location_completed(self, location_path: str) -> bool:
+        """Check if a location has been marked as completed."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM processed_locations WHERE location_path = ? AND completed = 1",
+            (location_path,)
+        )
+        return cursor.fetchone() is not None
+
+    def mark_location_completed(self, location_id: int):
+        """Mark a processed location as completed."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE processed_locations SET completed = 1 WHERE id = ?",
+            (location_id,)
+        )
+        self.conn.commit()
+
     def record_processed_location(self, location_path: str, duplicates_count: int, completed: bool = True) -> int:
         """Record a processed location and return its ID."""
         cursor = self.conn.cursor()

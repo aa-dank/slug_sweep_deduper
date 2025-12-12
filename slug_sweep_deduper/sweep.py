@@ -189,6 +189,11 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
         file_server_mount = env_config['FILE_SERVER_MOUNT']
         target_location = normalize_path_for_query(location_path, file_server_mount)
         
+        # Check if location has already been completed
+        if sweep_db.is_location_completed(location_path):
+            console.print(f"[yellow]Note: Location '{location_path}' has been marked as completed in a previous run.[/yellow]")
+            console.print("[yellow]Continuing scan for new duplicates...[/yellow]")
+
         console.print(f"[cyan]Querying for duplicates in:[/cyan] {target_location}")
         
         # Query for duplicates
@@ -232,6 +237,8 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
         last_sync_time = time.time()
         sync_interval = 600  # 10 minutes in seconds
         
+        skipped_any = False
+
         # Interactive review loop
         file_ids = list(grouped.keys())
         for file_idx, file_id in enumerate(file_ids, start=1):
@@ -268,6 +275,7 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                 
                 elif cmd_type == 'skip':
                     console.print("[yellow]Skipping this file.[/yellow]")
+                    skipped_any = True
                     break
                 
                 elif cmd_type == 'keep':
@@ -392,6 +400,12 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                 last_sync_time = current_time
         
         # Mark location as completed
+        if not skipped_any:
+            sweep_db.mark_location_completed(location_id)
+            console.print("\n[green]Location marked as completed (all files processed).[/green]")
+        else:
+            console.print("\n[yellow]Location NOT marked as completed (some files skipped).[/yellow]")
+
         console.print("\n[green]All files in location processed.[/green]")
         
     except Exception as e:
