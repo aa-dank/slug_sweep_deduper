@@ -1,10 +1,13 @@
 """Main sweep workflow and interactive review loop."""
 
 import os
+import re
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+
+from openpyxl import Workbook
 
 from rich.console import Console
 from rich.table import Table
@@ -23,6 +26,47 @@ from slug_sweep_deduper.filters import ACTIVE_FILTERS
 
 
 console = Console()
+
+
+def sanitize_filename(name: str) -> str:
+    """Return a filesystem-safe fragment derived from the provided name."""
+    sanitized = re.sub(r'[^A-Za-z0-9._-]+', '_', name).strip('_')
+    return sanitized or 'file'
+
+
+def export_file_paths(
+    file_id: int,
+    locations: List[Dict[str, Any]],
+    file_server_mount: str,
+    export_base: Optional[Path | str] = None,
+) -> Path:
+    """Export all file paths for a file to an Excel spreadsheet."""
+    if not locations:
+        raise ValueError("No locations available to export.")
+
+    export_dir = Path(export_base) if export_base else Path('staging') / 'exports'
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    export_path = export_dir / f"{file_id}_{timestamp}.xlsx"
+
+    # Create workbook and write header + file paths
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "File Paths"
+    worksheet.append(["File Path"])
+    
+    for loc in locations:
+        file_path = build_file_path(
+            file_server_mount,
+            loc['file_server_directories'],
+            loc['filename']
+        )
+        worksheet.append([str(file_path)])
+    
+    workbook.save(export_path)
+
+    return export_path
 
 
 def apply_filters(file_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -118,7 +162,7 @@ def parse_user_command(command: str) -> tuple[str, List[int]]:
     -------
     tuple
         (command_type, list_of_numbers)
-        command_type can be: 'delete', 'keep', 'open', 'directory', 'skip', 'quit'
+        command_type can be: 'delete', 'keep', 'open', 'directory', 'export', 'skip', 'quit'
     """
     command = command.strip().lower()
     
@@ -133,6 +177,8 @@ def parse_user_command(command: str) -> tuple[str, List[int]]:
         return ('quit', [])
     elif command == 'o':
         return ('open', [])
+    elif command == 'x':
+        return ('export', [])
     elif command.startswith('d '):
         try:
             num = int(command.split()[1])
@@ -257,6 +303,7 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                 console.print("  [cyan]c[/cyan] - Keep all copies (mark processed)")
                 console.print("  [cyan]o[/cyan] - Open first accessible copy for inspection")
                 console.print("  [cyan]d <#>[/cyan] - Open containing directory of a specific file")
+                console.print("  [cyan]x[/cyan] - Export file paths to spreadsheet")
                 console.print("  [cyan]s[/cyan] - Skip this file")
                 console.print("  [cyan]q[/cyan] - Quit and sync database")
                 
@@ -287,6 +334,24 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
                     )
                     console.print("[green]Marked as processed (all copies kept).[/green]")
                     break
+
+                elif cmd_type == 'export':
+                    console.print("[cyan]Exporting file paths to CSV...[/cyan]")
+                    try:
+                        export_path = export_file_paths(
+                            file_id=file_id,
+                            locations=all_locations,
+                            file_server_mount=file_server_mount
+                        )
+                    except OSError as err:
+                        console.print(f"[red]Failed to export file paths: {err}[/red]")
+                    except ValueError as err:
+                        console.print(f"[red]{err}[/red]")
+                    else:
+                        console.print(
+                            f"[green]Exported {len(all_locations)} paths to {export_path}[/green]"
+                        )
+                    continue
                 
                 elif cmd_type == 'directory':
                     if numbers:

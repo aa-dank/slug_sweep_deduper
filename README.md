@@ -70,7 +70,9 @@ During a sweep session, you can use these commands:
 
 - **Numbers** (e.g., `1 3 5`) - Delete the specified file instances
 - **c** - Keep all copies and mark this file as processed
-- **o <#>** (e.g., `o 2`) - Open a specific file for inspection
+- **o** - Open the first accessible copy for inspection
+- **d <#>** (e.g., `d 2`) - Open the containing directory for a specific file
+- **x** - Export the current table's file paths to a CSV spreadsheet (`staging/exports`)
 - **s** - Skip this file without processing
 - **q** - Quit and sync database
 
