@@ -182,6 +182,25 @@ class SweepDB:
         self.conn.commit()
         return cursor.lastrowid
 
+    def ensure_location_completed(self, location_path: str, duplicates_count: int = 0):
+        """Mark the location as completed, inserting a row if needed."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "UPDATE processed_locations SET completed = 1 WHERE location_path = ?",
+            (location_path,)
+        )
+
+        if cursor.rowcount == 0:
+            cursor.execute(
+                """
+                INSERT INTO processed_locations (location_path, datetime, duplicates_count, completed)
+                VALUES (?, ?, ?, 1)
+                """,
+                (location_path, datetime.utcnow().isoformat(), duplicates_count)
+            )
+
+        self.conn.commit()
+
     def record_processed_file(self, archives_app_file_id: int, processed_location_id: int, decision: str) -> int:
         """Record a processed file and return its ID."""
         cursor = self.conn.cursor()

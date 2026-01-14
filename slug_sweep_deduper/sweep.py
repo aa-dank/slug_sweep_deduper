@@ -238,14 +238,18 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
         # Check if location has already been completed
         if sweep_db.is_location_completed(location_path):
             console.print(f"[yellow]Note: Location '{location_path}' has been marked as completed in a previous run.[/yellow]")
-            console.print("[yellow]Continuing scan for new duplicates...[/yellow]")
+            console.print("[yellow]Skipping sweep for this location.[/yellow]")
+            return
 
         console.print(f"[cyan]Querying for duplicates in:[/cyan] {target_location}")
         
         # Query for duplicates
         duplicate_records = archives_db.find_duplicates_in_location(target_location)
         
+        total_duplicate_files = len({rec['archives_app_file_id'] for rec in duplicate_records})
+
         if not duplicate_records:
+            sweep_db.ensure_location_completed(location_path, duplicates_count=0)
             console.print("[yellow]No duplicate files found in this location.[/yellow]")
             return
         
@@ -254,6 +258,11 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
         # Apply filters
         filtered_records = apply_filters(duplicate_records)
         console.print(f"[green]After filtering: {len(filtered_records)} file instances to review.[/green]")
+
+        if not filtered_records:
+            sweep_db.ensure_location_completed(location_path, duplicates_count=total_duplicate_files)
+            console.print("[yellow]All duplicates were excluded by filters. Recorded as completed.[/yellow]")
+            return
         
         # Remove already-processed files
         unprocessed_records = [
@@ -262,11 +271,17 @@ def run_sweep(location_path: str, env_config: Dict[str, str], debug: bool = Fals
         ]
         
         console.print(f"[green]Unprocessed files: {len(unprocessed_records)} instances.[/green]")
+
+        if not unprocessed_records:
+            sweep_db.ensure_location_completed(location_path, duplicates_count=total_duplicate_files)
+            console.print("[yellow]All duplicates in this location have already been processed. Recorded as completed.[/yellow]")
+            return
         
         # Group by file_id
         grouped = group_by_file_id(unprocessed_records)
         
         if not grouped:
+            sweep_db.ensure_location_completed(location_path, duplicates_count=total_duplicate_files)
             console.print("[yellow]All files have already been processed.[/yellow]")
             return
         
