@@ -2,6 +2,7 @@ import httpx
 import os
 import sqlite3
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -34,19 +35,30 @@ class ArchivesApp:
         Returns:
             tuple[bool, Optional[str]]: (success, error_message)
         """
-        try:
-            old_path = parse.quote(target_path)
-            delete_url = self.edit_url_template.format('DELETE', old_path, '')
-            delete_response = httpx.get(
-                url=delete_url,
-                headers=self.request_headers,
-                verify=False,
-                timeout=30.0
-            )
-            delete_response.raise_for_status()
-            return (True, None)
-        except Exception as e:
-            return (False, str(e))
+        max_attempts = 3  # initial try + two retries
+        timeout_seconds = 90.0  # allow slower API responses
+        backoff_seconds = 5
+
+        last_error: Optional[str] = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                old_path = parse.quote(target_path)
+                delete_url = self.edit_url_template.format('DELETE', old_path, '')
+                delete_response = httpx.get(
+                    url=delete_url,
+                    headers=self.request_headers,
+                    verify=False,
+                    timeout=timeout_seconds
+                )
+                delete_response.raise_for_status()
+                return (True, None)
+            except Exception as e:
+                last_error = f"Attempt {attempt}/{max_attempts} failed: {e}"
+                if attempt < max_attempts:
+                    time.sleep(backoff_seconds * attempt)
+
+        return (False, last_error)
 
 
 class SweepDB:
